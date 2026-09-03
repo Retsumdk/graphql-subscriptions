@@ -1,14 +1,12 @@
 # graphql-subscriptions
 
-> A complete, tested utility for canonical hashing and digesting of JSON values.
+> GraphQL-style pub/sub subscription engine with per-listener field filtering and topic delivery.
 
-A complete, tested building block for the Retsumdk ecosystem. Small surface, explicit behavior, zero hidden state — reviewed in minutes, trusted in production.
+### What it is
 
-## Features
+GraphQL-style pub/sub subscription engine with per-listener field filtering.
 
-- Deterministic, stable normalization of JSON-serializable input
-- SHA-256 digesting over a canonical form
-- Structured, validated result shape with a passing test suite
+Real, working Python for the Retsumdk ecosystem with an executable test suite.
 
 ## Getting started
 

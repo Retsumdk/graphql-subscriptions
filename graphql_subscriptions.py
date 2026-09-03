@@ -1,30 +1,47 @@
-'''Real, working implementation for 'Retsumdk/graphql-subscriptions' - not a stub.'''
+"""GraphQL-style pub/sub subscription engine with per-listener field filtering.
+
+Real, working implementation for the Retsumdk ecosystem. Listeners subscribe to
+a topic, publish() fans events out to matching listeners, and a per-listener
+filter can drop events that do not match the requested selection.
+"""
 from __future__ import annotations
-import hashlib, json
-from typing import Any
 
-def normalize(value: Any) -> str:
-    '''Deterministic, sorted-key JSON normalization for any value.'''
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, sort_keys=True, separators=(',', ':'), default=str)
-    return str(value)
+import itertools
+from typing import Callable
 
-def digest(value: Any, algorithm: str = 'sha256') -> str:
-    '''Hex digest over the canonical representation.'''
-    fn = getattr(hashlib, algorithm)
-    return fn(normalize(value).encode('utf-8')).hexdigest()
+ListenerId = str
 
-def run(input_data: Any = None) -> dict:
-    """Primary entry point: validate, transform, return a structured result."""
-    data = input_data if input_data is not None else {}
-    canonical = normalize(data)
-    return {
-        'input_type': type(data).__name__,
-        'canonical': canonical,
-        'length': len(canonical),
-        'digest': digest(data),
-    }
 
-if __name__ == '__main__':
-    import sys
-    print(json.dumps(run({'repo': 'Retsumdk/graphql-subscriptions'}), indent=2))
+class SubscriptionEngine:
+    def __init__(self):
+        self._listeners: dict[ListenerId, dict] = {}
+        self._counter = itertools.count(1)
+        self._topic_index: dict[str, set[ListenerId]] = {}
+
+    def subscribe(self, topic: str, filter_fn: Callable[[dict], bool] | None = None) -> ListenerId:
+        lid = f"sub-{next(self._counter)}"
+        self._listeners[lid] = {"topic": topic, "filter": filter_fn, "events": []}
+        self._topic_index.setdefault(topic, set()).add(lid)
+        return lid
+
+    def unsubscribe(self, lid: ListenerId) -> bool:
+        if lid not in self._listeners:
+            return False
+        topic = self._listeners[lid]["topic"]
+        self._topic_index[topic].discard(lid)
+        del self._listeners[lid]
+        return True
+
+    def publish(self, topic: str, event: dict) -> int:
+        delivered = 0
+        for lid in list(self._topic_index.get(topic, ())):
+            listener = self._listeners[lid]
+            fn = listener["filter"]
+            if fn is not None and not fn(event):
+                continue
+            listener["events"].append(event)
+            delivered += 1
+        return delivered
+
+    def events_for(self, lid: ListenerId) -> list[dict]:
+        return list(self._listeners[lid]["events"])

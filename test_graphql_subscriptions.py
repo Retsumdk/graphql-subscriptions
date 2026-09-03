@@ -1,14 +1,26 @@
-from graphql_subscriptions import digest, normalize, run
+from graphql_subscriptions import SubscriptionEngine
 
-def test_normalize_deterministic():
-    assert normalize({'b': 1, 'a': 2}) == normalize({'a': 2, 'b': 1})
 
-def test_digest_stable():
-    assert digest('x') == digest('x')
-    assert digest({'k': 'v'}) == digest({'k': 'v'})
+def test_fans_out_to_subscribers():
+    eng = SubscriptionEngine()
+    a = eng.subscribe("orders")
+    b = eng.subscribe("orders")
+    n = eng.publish("orders", {"id": 1})
+    assert n == 2
+    assert eng.events_for(a) == [{"id": 1}]
+    assert eng.events_for(b) == [{"id": 1}]
 
-def test_run_shapes_result():
-    out = run({'hello': 'world'})
-    assert out['input_type'] == 'dict'
-    assert out['length'] > 0
-    assert len(out['digest']) == 64
+
+def test_filter_drops_non_matching():
+    eng = SubscriptionEngine()
+    lid = eng.subscribe("orders", filter_fn=lambda e: e.get("status") == "paid")
+    eng.publish("orders", {"id": 1, "status": "pending"})
+    eng.publish("orders", {"id": 2, "status": "paid"})
+    assert eng.events_for(lid) == [{"id": 2, "status": "paid"}]
+
+
+def test_unsubscribe_stops_delivery():
+    eng = SubscriptionEngine()
+    lid = eng.subscribe("orders")
+    eng.unsubscribe(lid)
+    assert eng.publish("orders", {"id": 9}) == 0
